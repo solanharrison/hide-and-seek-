@@ -1,139 +1,59 @@
 <!DOCTYPE html>
 <html>
 <head>
-<meta charset="UTF-8">
-<title>House of Shadows</title>
-<style>
-body { margin:0; background:#111; color:white; font-family:sans-serif; }
-#ui { position:absolute; top:10px; left:10px; z-index:10; }
-canvas { background:#222; display:block; margin:auto; }
-</style>
+  <title>Simple Multiplayer</title>
+  <style>
+    body { font-family: sans-serif; background:#111; color:white; }
+    button { margin:5px; padding:10px; }
+  </style>
 </head>
 <body>
 
-<div id="ui">
+<h2>Multiplayer Room</h2>
+
 <input id="name" placeholder="Enter name">
 <button onclick="join()">Join</button>
-<button onclick="start()">Start</button>
-<div id="info"></div>
-</div>
+<button onclick="ready()">Ready</button>
 
-<canvas id="game" width="900" height="600"></canvas>
+<h3>Players:</h3>
+<div id="players"></div>
 
-<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+<h2 id="status"></h2>
+
+<script src="/socket.io/socket.io.js"></script>
 <script>
 
 const socket = io();
 
-
-const canvas = document.getElementById("game");
-const ctx = canvas.getContext("2d");
-
-let players = {};
-let myId = null;
-let killerId = null;
-let role = null;
-let keys = {};
-let bloodEffects = [];
-
-document.addEventListener("keydown", e => keys[e.key] = true);
-document.addEventListener("keyup", e => keys[e.key] = false);
+let joined = false;
 
 function join() {
   const name = document.getElementById("name").value;
+  if (!name) return alert("Enter name");
+
   socket.emit("join", name);
+  joined = true;
 }
 
-function start() {
-  socket.emit("startGame");
+function ready() {
+  if (!joined) return alert("Join first");
+  socket.emit("ready");
 }
 
-socket.on("connect", () => {
-  myId = socket.id;
-});
+socket.on("players", (data) => {
+  const div = document.getElementById("players");
+  div.innerHTML = "";
 
-socket.on("players", data => {
-  players = data;
-});
-
-socket.on("gameStarted", data => {
-  killerId = data.killerId;
-  role = (myId === killerId) ? "killer" : "survivor";
-});
-
-socket.on("timer", t => {
-  document.getElementById("info").innerText = "Time: " + t;
-});
-
-socket.on("gameOver", winner => {
-  alert(winner + " WIN");
-  location.reload();
-});
-
-socket.on("blood", player => {
-  bloodEffects.push({x:player.x, y:player.y, life:30});
-});
-
-function update() {
-  if (!players[myId] || !players[myId].alive) return;
-
-  let p = players[myId];
-
-  if (keys["w"]) p.y -= 3;
-  if (keys["s"]) p.y += 3;
-  if (keys["a"]) p.x -= 3;
-  if (keys["d"]) p.x += 3;
-
-  socket.emit("move", {x:p.x, y:p.y});
-}
-
-function draw() {
-  ctx.clearRect(0,0,canvas.width,canvas.height);
-
-  for (let id in players) {
-    const p = players[id];
-    if (!p.alive) continue;
-
-    ctx.fillStyle = (id === killerId) ? "red" : "white";
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, 15, 0, Math.PI*2);
-    ctx.fill();
-
-    ctx.fillStyle="yellow";
-    ctx.fillText(p.name, p.x-15, p.y-20);
-  }
-
-  // Flashlight cone
-  if (role === "killer" && players[myId]) {
-    const p = players[myId];
-    ctx.fillStyle = "rgba(255,0,0,0.2)";
-    ctx.beginPath();
-    ctx.moveTo(p.x, p.y);
-    ctx.arc(p.x, p.y, 100, 0, Math.PI/3);
-    ctx.closePath();
-    ctx.fill();
-  }
-
-  // Blood
-  bloodEffects.forEach(b => {
-    ctx.fillStyle = "red";
-    ctx.beginPath();
-    ctx.arc(b.x, b.y, 10, 0, Math.PI*2);
-    ctx.fill();
-    b.life--;
+  Object.values(data).forEach(p => {
+    div.innerHTML += `<p>${p.name} ${p.ready ? "✅" : ""}</p>`;
   });
+});
 
-  bloodEffects = bloodEffects.filter(b => b.life > 0);
-}
-
-function loop() {
-  update();
-  draw();
-  requestAnimationFrame(loop);
-}
-
-loop();
+socket.on("gameStart", () => {
+  document.getElementById("status").innerText = "Game Started!";
+});
 
 </script>
+
 </body>
 </html>
